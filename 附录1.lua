@@ -1,6 +1,12 @@
+--=====================Animation Lib===============================
+--声明
 Internal = { }
 Internal.machines = {}
 Internal.TPS = 60
+SetTPS = function(t)
+  Internal.TPS = t
+  return Internal.TPS
+end
 AddAnimMachine = function(M)
   table.insert(Internal.machines,M)
 end
@@ -185,8 +191,10 @@ Internal.Update_All_Animation = function()
           if ani.turn_tick < 0 then
             ani.turn_tick = 0
             ani.max_turn_tick = 0
-            if Layer[i-1] ~= nil then
-              Layer[i-1].tag = true
+            for n = 1, i do
+              if Layer[n-1] ~= nil then
+                Layer[n-1].tag = true
+              end
             end
           else
             turn_alpha = ani.turn_tick /ani.max_turn_tick
