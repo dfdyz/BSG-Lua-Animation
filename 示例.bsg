@@ -1,0 +1,577 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--Besiege machine save file.-->
+<Machine version="1" bsgVersion="1.3" name="Animation-V100">
+    <!--The machine's position and rotation.-->
+    <Global>
+        <Position x="0" y="5.05" z="0" />
+        <Rotation x="0" y="0" z="0" w="1" />
+    </Global>
+    <!--The machine's additional data or modded data.-->
+    <Data>
+        <StringArray key="lua_files">LuaRoot/main.lua</StringArray>
+        <StringArray key="lua_data">-- Created 07/07/2022 22:55:57 
+
+local machine_info = machine.get_machine_info()
+local starting_block = machine_info.get_block_info(0)
+
+
+--=====================Animation Lib===============================
+--声明
+Internal = { }
+Internal.machines = {}
+Internal.TPS = 60
+SetTPS = function(t)
+  Internal.TPS = t
+  return Internal.TPS
+end
+AddAnimMachine = function(M)
+  table.insert(Internal.machines,M)
+end
+
+function Internal.DeepCopy(obj)
+  local InTable = {};
+  local function Func(obj)
+    if type(obj) ~= "table" then   --判断表中是否有表
+      return obj;
+    end
+    local NewTable = {};  --定义一个新表
+    InTable[obj] = NewTable;  --若表中有表，则先把表给InTable，再用NewTable去接收内嵌的表
+    for k,v in pairs(obj) do  --把旧表的key和Value赋给新表
+      NewTable[Func(k)] = Func(v);
+    end
+    return setmetatable(NewTable, getmetatable(obj))--赋值元表
+  end
+  return Func(obj) --若表中有表，则把内嵌的表也复制了
+end
+
+function Log(v)
+  if DeBug_Mode then
+    print(v)
+  end
+end
+
+function Note_new(name)
+  t = {}
+  t.ang = 0
+  t.name = name
+  t.ref = machine.get_refs_control(name)
+  return t
+end
+
+function Note_update(note)
+  note.ref.set_steering(note.ang)
+end
+
+function Anim_Machine_new(layer_count)
+  layer_count = layer_count or 1
+  t = {}
+  t.notes = {}
+  t.layer = {}
+  for i = 1, layer_count do
+    t.layer[i] = {}
+  end
+  return t
+end
+
+function Anim_Machine_AddNote(m,n)
+  m.notes[n.name] = n
+end
+
+function Anim_Machine_ChangeAnim(m,l,a,turn_tick)     --Anim_Machine_ChangeAnim(Anim_Machine Machine,int layer,Anim animation[,int turn_tick]);  return Anim;
+  local t = Internal.DeepCopy(a)
+  turn_tick = turn_tick or 0
+  t.turn_tick,t.max_turn_tick = turn_tick,turn_tick
+  t.tag = false
+  table.insert(m.layer[l],t)
+  return t
+end
+
+function Anim_Machine_Clear(m)
+  for _, n in pairs(m.notes) do
+    n.ang = 0
+  end
+end
+
+Arc = { line = function(t) return t end,
+
+}--预设曲线
+
+--[[
+关键帧示例
+Key = { notes = { ["Note1"] = 90 } ,  Note1骨骼   旋转至90°
+        arc = Arc.line  --平滑曲线函数 类型function
+}
+
+]]--
+
+--Anim = { keys = {} , tick = 0 , alpha = 0 , turn_tick = 0 , max_turn_tick = 0 , loop = false , tag = false}
+
+function Anim_new(keys)
+  local t = {}
+  keys = keys or {}
+  t.keys = keys
+  t.tick = 0
+  t.alpha = 0
+  t.max_turn_tick = 0
+  t.loop = false
+  t.turn_tick = 0
+  t.tag = false
+  return t
+end
+
+function Anim_Copy(anim)
+  local t = {}
+  t.keys = anim.keys
+  t.tick = anim.tick
+  t.alpha = anim.alpha
+  t.max_turn_tick = anim.max_turn_tick
+  t.loop = anim.loop
+  t.turn_tick = anim.turn_tick
+  t.tag = anim.tag
+  return t
+end
+
+function Anim_getMaxTick(anim)
+  local t = 0
+  for k,_ in pairs(anim.keys) do
+    if k &gt; t then
+      t = k
+    end
+  end
+  return t
+end
+
+function getTableMaxKey(t)
+  local tmp = 0
+  for k,_ in pairs(t) do
+    if k &gt; tmp then
+      tmp = k
+    end
+  end
+  return tmp
+end
+
+Internal.Update_All_Animation = function()
+  local d_time = time.delta_time()
+  local d_tick = d_time * Internal.TPS
+  --print(d_tick)
+
+
+  for j,m in pairs(Internal.machines) do
+    --处理动画
+    Anim_Machine_Clear(m)
+    local MaxLayer = getTableMaxKey(m.layer)
+
+    for i = 1, MaxLayer do
+      local Layer = m.layer[i]
+
+      --处理层
+      local tmp_tag = false
+      while true do
+        local max_key = getTableMaxKey(Layer)
+
+        for i=1, max_key do
+          if Layer[i].tag then
+            table.remove(Layer,i)
+            tmp_tag = false
+            break
+          end
+        end
+        if tmp_tag then
+          break
+        end
+        tmp_tag = true
+      end
+
+      local count = getTableMaxKey(Layer)
+      for i = 1 , count do
+        local ani = Layer[i]
+        local max_tick = Anim_getMaxTick(ani)
+        local tmp_v = 0
+        local turn_alpha = 0
+
+        --计算tick
+        ani.tick = d_tick + ani.tick
+        while ani.tick &gt;= max_tick do
+          ani.tick = ani.tick - max_tick
+          tmp_v = tmp_v + 1
+          --及时止损
+          if tmp_v &gt; 5 then
+            ani.tick = 0
+            break
+          end
+        end
+
+        --处理过渡tick
+        if ani.max_turn_tick &gt; 0 then
+          ani.turn_tick = ani.turn_tick - d_tick
+          if ani.turn_tick &lt; 0 then
+            ani.turn_tick = 0
+            ani.max_turn_tick = 0
+            for n = 1, i do
+              if Layer[n-1] ~= nil then
+                Layer[n-1].tag = true
+              end
+            end
+          else
+            turn_alpha = ani.turn_tick /ani.max_turn_tick
+          end
+        end
+
+        --处理骨骼
+        for name,note in pairs(m.notes) do
+          local before = -1
+          local after = -1
+          local rt = true
+          function handle_note()
+            --查找前后帧
+            for tick,key in pairs(ani.keys) do
+              if key.notes[name] ~= nil then
+                if tick &lt;= ani.tick and tick &gt; before then
+                  before = tick
+                end
+              end
+            end
+
+            if before == -1 then
+              return
+            end
+
+            after = before
+
+            for tick,key in pairs(ani.keys) do
+              if key.notes[name] ~= nil and tick &gt; after then
+                after = tick
+              end
+            end
+
+            for tick,key in pairs(ani.keys) do
+              if key.notes[name] ~= nil then
+                if tick &gt; before and tick &lt; after then
+                  after = tick
+                end
+              end
+            end
+
+            --更新骨骼
+
+            local t = ( ani.tick - before ) / ( after - before )
+            t = ani.keys[after].arc(t)
+            local after_ang = ani.keys[after].notes[name]
+            local before_ang = ani.keys[before].notes[name]
+
+            local tmp_ang = (after_ang-before_ang) * t + before_ang
+
+            --处理层透明度
+            if ani.max_turn_tick &gt; 0 then
+              tmp_ang = note.ang * ani.alpha + tmp_ang * (1 - ani.alpha)
+              note.ang = note.ang * turn_alpha + tmp_ang * (1 - turn_alpha)
+            else
+              note.ang = note.ang * ani.alpha + tmp_ang * (1 - ani.alpha)
+            end
+          end
+
+          handle_note()
+          Note_update(note)
+        end
+      end
+    end
+  end
+end
+--==========================================================================
+
+--============= Main ================
+--创建动作对象
+animation = Anim_new()
+animation.keys = {
+  [0] = { notes = { ["B1"] = 0 , ["B2"] = 0 , ["B3"] = 0 } , arc = Arc.line },
+  [30] = { notes = {["B1"] = 90 , ["B2"] = -90 , ["B3"] = 90} , arc = Arc.line },
+  [60] = { notes = {["B1"] = 0 , ["B2"] = 0 , ["B3"] = 0} , arc = Arc.line }
+}
+
+animation2 = Anim_new()
+animation2.keys = {
+  [0] = { notes = { ["B1"] = 0 , ["B2"] = 0 , ["B3"] = 0 } , arc = Arc.line },
+  [30] = { notes = {["B1"] = -90 , ["B2"] = -90 , ["B3"] = -90} , arc = Arc.line },
+  [60] = { notes = {["B1"] = 0 , ["B2"] = 0 , ["B3"] = 0} , arc = Arc.line }
+}
+
+animation3 = Anim_new()
+animation3.keys = {
+  [0] = { notes = { ["B3"] = 0 } , arc = Arc.line },
+  [30] = { notes = {["B3"] = -90} , arc = Arc.line },
+  [60] = { notes = {["B3"] = 0} , arc = Arc.line }
+}
+
+
+--创建骨架对象
+MAC = Anim_Machine_new(2)
+--创建关节对象
+B1 = Note_new("B1")
+B2 = Note_new("B2")
+B3 = Note_new("B3")
+--添加关节对象
+Anim_Machine_AddNote(MAC,B1)
+Anim_Machine_AddNote(MAC,B2)
+Anim_Machine_AddNote(MAC,B3)
+--置入初始动作
+--Anim_Machine_ChangeAnim(MAC,1,animation)
+
+--声明机器
+AddAnimMachine(MAC)
+
+
+
+local function play()
+  -- called on simulation start
+end
+
+local function update()
+
+
+
+  -- called every frame
+end
+
+local function late_update()
+  -- called every frame after update
+end
+
+local function fixed_update()
+  --动画机
+  Internal.Update_All_Animation()
+
+
+
+  -- frame-rate independent update (called 100 times per second)
+end
+
+
+
+--DEBUG GUI
+local window_rect = rect.new(100, 450, 300, 200)
+local anim = true
+
+local function ctr_win()
+  if gui.button(rect.new(5,50,250,30), "ChangAnim") then
+    if anim then
+      Anim_Machine_ChangeAnim(MAC,1,animation2,45)
+      anim = false
+    else
+      Anim_Machine_ChangeAnim(MAC,1,animation,45)
+      anim = true
+    end
+  end
+  gui.drag_window()
+end
+
+local function on_gui()
+
+  --DEBUG
+  window_rect = gui.window(1000, window_rect, "Debug Control Panel", ctr_win)
+  -- called for rendering and handling GUI events
+end
+
+return {
+  play = play,
+  update = update,
+  late_update = late_update,
+  fixed_update = fixed_update,
+  on_gui = on_gui,
+}
+
+</StringArray>
+        <StringArray key="lua_modules_names">default</StringArray>
+        <StringArray key="lua_modules_paths">LuaRoot/main.lua</StringArray>
+        <Boolean key="lua">True</Boolean>
+        <StringArray key="requiredMods" />
+    </Data>
+    <!--The machine's blocks.-->
+    <Blocks>
+        <Block id="0" guid="095f3e8f-f75b-4cc2-ba39-feb0e463a581">
+            <Transform>
+                <Position x="0" y="0" z="0" />
+                <Rotation x="0" y="0" z="0" w="1" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <String key="bmt-TransformHolder" />
+            </Data>
+        </Block>
+        <Block id="28" guid="73d32825-99c7-4d4e-8a8d-1cb689f9a7ae">
+            <Transform>
+                <Position x="0.5000004" y="0.4999995" z="-3.056412E-14" />
+                <Rotation x="-0.7071068" y="-2.235637E-08" z="2.001198E-08" w="0.7071068" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <StringArray key="bmt-left">
+                    <String>LeftArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <StringArray key="bmt-right">
+                    <String>RightArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <Boolean key="bmt-autoReturn">False</Boolean>
+                <Single key="bmt-rotation-speed">1</Single>
+                <Boolean key="bmt-uselimits">False</Boolean>
+                <SingleArray key="bmt-limits">
+                    <Single>40</Single>
+                    <Single>40</Single>
+                </SingleArray>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">B1</String>
+                <String key="bmt-TransformHolder" />
+                <Boolean key="flipped">False</Boolean>
+            </Data>
+        </Block>
+        <Block id="28" guid="98b379ff-ab0e-4437-bf67-f3ec9e77d1c8">
+            <Transform>
+                <Position x="0.5000004" y="1.5" z="-2.468928E-08" />
+                <Rotation x="-0.7071069" y="-3.726455E-08" z="2.553425E-09" w="0.7071068" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <StringArray key="bmt-left">
+                    <String>LeftArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <StringArray key="bmt-right">
+                    <String>RightArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <Boolean key="bmt-autoReturn">False</Boolean>
+                <Single key="bmt-rotation-speed">1</Single>
+                <Boolean key="bmt-uselimits">False</Boolean>
+                <SingleArray key="bmt-limits">
+                    <Single>40</Single>
+                    <Single>40</Single>
+                </SingleArray>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">B2</String>
+                <String key="bmt-TransformHolder" />
+                <Boolean key="flipped">False</Boolean>
+            </Data>
+        </Block>
+        <Block id="28" guid="3e77768e-4668-4145-ac0b-fbd2ae209af9">
+            <Transform>
+                <Position x="0.5000001" y="2.5" z="-1.532479E-07" />
+                <Rotation x="-0.7071066" y="-4.098693E-08" z="4.982225E-08" w="0.7071069" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <StringArray key="bmt-left">
+                    <String>LeftArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <StringArray key="bmt-right">
+                    <String>RightArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <Boolean key="bmt-autoReturn">False</Boolean>
+                <Single key="bmt-rotation-speed">1</Single>
+                <Boolean key="bmt-uselimits">False</Boolean>
+                <SingleArray key="bmt-limits">
+                    <Single>40</Single>
+                    <Single>40</Single>
+                </SingleArray>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">B3</String>
+                <String key="bmt-TransformHolder" />
+                <Boolean key="flipped">False</Boolean>
+            </Data>
+        </Block>
+        <Block id="16" guid="c6fcbd1c-8911-4934-b9a9-b8510f0a6c01">
+            <Transform>
+                <Position x="-0.5" y="0" z="0" />
+                <Rotation x="0" y="-0.7071068" z="0" w="0.7071068" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <Single key="bmt-spring">1</Single>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">Suspension_c6fcbd1c</String>
+                <String key="bmt-TransformHolder" />
+            </Data>
+        </Block>
+        <Block id="16" guid="eca84ac4-8032-4de9-a157-b4182a38861c">
+            <Transform>
+                <Position x="0" y="0" z="0.5" />
+                <Rotation x="0" y="0" z="0" w="1" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <Single key="bmt-spring">1</Single>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">Suspension_eca84ac4</String>
+                <String key="bmt-TransformHolder" />
+            </Data>
+        </Block>
+        <Block id="16" guid="1de8a387-8ca5-45f9-8b8e-6877e19b3259">
+            <Transform>
+                <Position x="0" y="0" z="-0.5" />
+                <Rotation x="0" y="1" z="0" w="0" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <Single key="bmt-spring">1</Single>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">Suspension_1de8a387</String>
+                <String key="bmt-TransformHolder" />
+            </Data>
+        </Block>
+        <Block id="16" guid="f8086cfe-bc44-4448-b038-17a683fa6ec8">
+            <Transform>
+                <Position x="-2.5" y="0" z="-1.788139E-07" />
+                <Rotation x="0" y="-0.7071067" z="0" w="0.7071068" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <Single key="bmt-spring">1</Single>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">Suspension_f8086cfe</String>
+                <String key="bmt-TransformHolder" />
+            </Data>
+        </Block>
+        <Block id="16" guid="d16e9729-9867-41d9-af5b-8e45cfa8e189">
+            <Transform>
+                <Position x="-4" y="0.5" z="5.960464E-08" />
+                <Rotation x="-0.7071068" y="6.322028E-08" z="6.322028E-08" w="0.7071068" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <Single key="bmt-spring">1</Single>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">Suspension_d16e9729</String>
+                <String key="bmt-TransformHolder" />
+            </Data>
+        </Block>
+        <Block id="16" guid="58c15b9c-44bb-4d83-b944-b85c06e69758">
+            <Transform>
+                <Position x="-4.5" y="2" z="-8.940695E-08" />
+                <Rotation x="-4.214684E-08" y="-0.7071066" z="4.214685E-08" w="0.7071069" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <Single key="bmt-spring">1</Single>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">Suspension_58c15b9c</String>
+                <String key="bmt-TransformHolder" />
+            </Data>
+        </Block>
+        <Block id="16" guid="ec87d82a-6bc0-4936-a951-060bed097700">
+            <Transform>
+                <Position x="-4.5" y="0" z="1.192093E-07" />
+                <Rotation x="0" y="-0.7071067" z="0" w="0.7071068" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <Single key="bmt-spring">1</Single>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">Suspension_ec87d82a</String>
+                <String key="bmt-TransformHolder" />
+            </Data>
+        </Block>
+    </Blocks>
+</Machine>
