@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--Besiege machine save file.-->
+<Machine version="1" bsgVersion="1.3" name="anim-debug">
+    <!--The machine's position and rotation.-->
+    <Global>
+        <Position x="0" y="5.05" z="0" />
+        <Rotation x="0" y="0" z="0" w="1" />
+    </Global>
+    <!--The machine's additional data or modded data.-->
+    <Data>
+        <StringArray key="lua_files">LuaRoot/main.lua</StringArray>
+        <StringArray key="lua_data">-- Created 07/13/2022 21:00:45 
+
+local machine_info = machine.get_machine_info()
+local starting_block = machine_info.get_block_info(0)
+
+--========================  Lib  ======================
+Internal = {}
+Internal.debug_window_rect = rect.new(100,450,450,600)
+Internal.note_list_rect = rect.new(5,70,440,250)
+
+Internal.gui_bar = 0
+Internal.gui_selected = 0
+Internal.gui_bar_pst = 0
+Internal.gui_input = "0.0000000"
+
+Internal.notes = {}
+Internal.note_list = {}
+
+
+Internal.debug_window_func = function(id)
+  Internal.note_list = {}
+  for k,_ in pairs(Internal.notes) do
+    table.insert(Internal.note_list, k)
+  end
+
+  Internal.gui_selected = gui.selection_grid(
+          Internal.note_list_rect,
+          Internal.gui_selected,
+          Internal.note_list,5)
+  local s = Internal.note_list[Internal.gui_selected+1]
+  gui.label(rect.new(5,330,440,24),"Selected: "..tostring(s))
+
+  Internal.gui_bar = gui.horizontal_scrollbar(rect.new(5,360,440,24),Internal.gui_bar,24,-360,360)
+  gui.label(rect.new(5,380,440,24),tostring(Internal.gui_bar))
+  Internal.gui_input = gui.text_area(rect.new(5,410,440,30),Internal.gui_input)
+
+  Internal.gui_bar_pst = nternal.gui_bar
+
+
+
+  gui.drag_window()
+end
+
+function Note_new(name)
+  t = {}
+  t.ang = 0
+  t.name = name
+  t.ref = machine.get_refs_control(name)
+  Internal.notes[name] = t
+  return t
+end
+
+function Note_update(note)
+  note.ref.set_steering(note.ang)
+end
+
+
+
+--======================================================
+
+--在这里放置你的初始化代码
+
+--Note_new("S1")
+--Note_new("S2")
+
+--==================
+
+local function play()
+  -- called on simulation start
+end
+
+local function update()
+  -- called every frame
+end
+
+local function late_update()
+  -- called every frame after update
+end
+
+local function fixed_update()
+  -- frame-rate independent update (called 100 times per second)
+end
+
+local function on_gui()
+  Internal.debug_window_rect = gui.window(114514,Internal.debug_window_rect,"DeBug",Internal.debug_window_func)
+
+  -- called for rendering and handling GUI events
+end
+
+return {
+  play = play,
+  update = update,
+  late_update = late_update,
+  fixed_update = fixed_update,
+  on_gui = on_gui,
+}
+
+</StringArray>
+        <StringArray key="lua_modules_names">default</StringArray>
+        <StringArray key="lua_modules_paths">LuaRoot/main.lua</StringArray>
+        <Boolean key="lua">True</Boolean>
+        <StringArray key="requiredMods" />
+    </Data>
+    <!--The machine's blocks.-->
+    <Blocks>
+        <Block id="0" guid="dffda4ab-dfd4-48ad-989d-6681a0fee2ff">
+            <Transform>
+                <Position x="0" y="0" z="0" />
+                <Rotation x="0" y="0" z="0" w="1" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <String key="bmt-TransformHolder" />
+            </Data>
+        </Block>
+        <Block id="28" guid="226bbc26-1796-46d7-b5cd-42a0fabdba99">
+            <Transform>
+                <Position x="0" y="1.5" z="0" />
+                <Rotation x="-0.7071068" y="0" z="0" w="0.7071068" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <StringArray key="bmt-left">
+                    <String>LeftArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <StringArray key="bmt-right">
+                    <String>RightArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <Boolean key="bmt-autoReturn">False</Boolean>
+                <Single key="bmt-rotation-speed">1</Single>
+                <Boolean key="bmt-uselimits">False</Boolean>
+                <SingleArray key="bmt-limits">
+                    <Single>40</Single>
+                    <Single>40</Single>
+                </SingleArray>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">S2</String>
+                <String key="bmt-TransformHolder" />
+                <Boolean key="flipped">False</Boolean>
+            </Data>
+        </Block>
+        <Block id="28" guid="3818511d-b98d-4fb5-bd58-f27c99393ea6">
+            <Transform>
+                <Position x="0" y="0.5" z="0" />
+                <Rotation x="-0.7071068" y="0" z="0" w="0.7071068" />
+                <Scale x="1" y="1" z="1" />
+            </Transform>
+            <Data>
+                <StringArray key="bmt-left">
+                    <String>LeftArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <StringArray key="bmt-right">
+                    <String>RightArrow</String>
+                    <String>Ignored=True</String>
+                </StringArray>
+                <Boolean key="bmt-autoReturn">False</Boolean>
+                <Single key="bmt-rotation-speed">1</Single>
+                <Boolean key="bmt-uselimits">False</Boolean>
+                <SingleArray key="bmt-limits">
+                    <Single>40</Single>
+                    <Single>40</Single>
+                </SingleArray>
+                <String key="bmt-lua_module">default</String>
+                <String key="bmt-lua_ref_key">S1</String>
+                <String key="bmt-TransformHolder" />
+                <Boolean key="flipped">False</Boolean>
+            </Data>
+        </Block>
+    </Blocks>
+</Machine>
